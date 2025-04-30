@@ -73,8 +73,10 @@
 
     // Main processing: warp and analyze
     function detectAndWarp() {
-      // Use ID to read canvas
-      let src = cv.imread('canvasOutput');
+      // Read canvas pixel data instead of cv.imread
+      const canvasOut = document.getElementById('canvasOutput');
+      const imgData = canvasOut.getContext('2d').getImageData(0, 0, canvasOut.width, canvasOut.height);
+      let src = cv.matFromImageData(imgData);
       let gray = new cv.Mat();
       let thresh = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
@@ -97,6 +99,38 @@
           const cy = pts.reduce((s,p) => s + p.y, 0) / 4;
           squares.push({ centroid: {x:cx, y:cy}, corners: pts });
         }
+        approx.delete();
+      }
+      if (squares.length !== 4) {
+        document.getElementById('loading').textContent = '❌ Failed to detect 4 corner markers.';
+        [src, gray, thresh, contours, hier].forEach(m => m.delete());
+        return;
+      }
+
+      // Order corners: top-left, top-right, bottom-right, bottom-left
+      squares.sort((a, b) => a.centroid.y - b.centroid.y);
+      const topRow = squares.slice(0,2).sort((a,b) => a.centroid.x - b.centroid.x);
+      const botRow = squares.slice(2,4).sort((a,b) => a.centroid.x - b.centroid.x);
+      const ptsArr = [ topRow[0].centroid, topRow[1].centroid, botRow[1].centroid, botRow[0].centroid ];
+
+      // Warp to fixed size
+      const WIDTH = 400, HEIGHT = 600;
+      const warpedCanvas = document.getElementById('canvasWarped');
+      warpedCanvas.width  = WIDTH;
+      warpedCanvas.height = HEIGHT;
+      const srcTri = cv.matFromArray(4,1,cv.CV_32FC2, ptsArr.flatMap(p=>[p.x,p.y]));
+      const dstTri = cv.matFromArray(4,1,cv.CV_32FC2, [0,0, WIDTH,0, WIDTH,HEIGHT, 0,HEIGHT]);
+      const M = cv.getPerspectiveTransform(srcTri, dstTri);
+      const dst = new cv.Mat();
+      cv.warpPerspective(src, dst, M, new cv.Size(WIDTH, HEIGHT));
+      cv.imshow('canvasWarped', dst);
+
+      // Cleanup
+      [src, gray, thresh, contours, hier, srcTri, dstTri, M, dst].forEach(m => m.delete());
+
+      // Analyze colors
+      setTimeout(() => analyzePads(warpedCanvas), 100);
+    }
         approx.delete();
       }
       if (squares.length !== 4) {
