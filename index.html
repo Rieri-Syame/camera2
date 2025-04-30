@@ -2,17 +2,95 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Camera + Test-Strip Analyzer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Strip Analyzer with Demo Login</title>
   <style>
-    body { font-family: sans-serif; padding: 1rem; }
-    #loading { margin-bottom: 1rem; font-size: 1.1rem; }
-    #takePicBtn { padding: .8rem 1.2rem; font-size: 1rem; }
-    #canvasContainer { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
-    canvas { border: 1px solid #ccc; max-width: 45vw; height: auto; }
-    #output { margin-top: 1.5rem; }
-    .result { margin: .4rem 0; }
+    /* hide the analyzer until login */
+    #analyzer { display: none; }
+    /* simple styling */
+    #auth, #analyzer { max-width: 400px; margin: auto; }
+    input { width: 100%; margin: 0.5em 0; padding: 0.5em; }
+    button { padding: 0.6em 1.2em; }
+    #msg { color: crimson; margin-top: 0.5em; }
   </style>
+</head>
+<body>
+
+  <!-- 1) AUTHENTICATION FORM -->
+  <div id="auth">
+    <h2>Sign Up / Login</h2>
+    <input id="email"    type="email"    placeholder="you@example.com" />
+    <input id="password" type="password" placeholder="Password" />
+    <button id="signup">Sign Up</button>
+    <button id="login">Login</button>
+    <div id="msg"></div>
+  </div>
+
+  <!-- 2) ANALYZER UI (hidden until logged in) -->
+  <div id="analyzer">
+    <h1>🔬 Test-Strip Analyzer</h1>
+    <!-- Paste your existing analyzer HTML/JS here -->
+    <!-- For example: -->
+    <div id="loading">Loading OpenCV.js…</div>
+    <button id="takePicBtn" disabled>Take Picture</button>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+    <div id="canvasContainer">
+      <canvas id="canvasOutput"></canvas>
+      <canvas id="canvasWarped" width="400" height="600"></canvas>
+    </div>
+    <div id="output">
+      <div>Glucose:   <strong id="res-glucose">—</strong></div>
+      <div>Protein:   <strong id="res-protein">—</strong></div>
+      <div>Nitrite:   <strong id="res-nitrite">—</strong></div>
+      <div>Leukocyte: <strong id="res-leukocyte">—</strong></div>
+    </div>
+    <!-- …and your OpenCV initialization and analyzePads() code below… -->
+  </div>
+
+  <!-- 3) DEMO LOCALSTORAGE AUTH SCRIPT -->
+  <script>
+    const authDiv     = document.getElementById('auth');
+    const analyzerDiv = document.getElementById('analyzer');
+    const emailIn     = document.getElementById('email');
+    const passIn      = document.getElementById('password');
+    const msg         = document.getElementById('msg');
+    const signupBtn   = document.getElementById('signup');
+    const loginBtn    = document.getElementById('login');
+
+    // Sign-up: store credentials in localStorage
+    signupBtn.onclick = () => {
+      const e = emailIn.value.trim(), p = passIn.value;
+      if (!e || !p) {
+        msg.textContent = 'Please fill both fields.';
+        return;
+      }
+      // Save under a fixed key – in real life you'd use a backend!
+      localStorage.setItem('demo_user', JSON.stringify({ email: e, pass: p }));
+      msg.textContent = '✅ Signed up! Now click “Login”.';
+    };
+
+    // Login: compare to saved credentials
+    loginBtn.onclick = () => {
+      const stored = JSON.parse(localStorage.getItem('demo_user') || '{}');
+      if (stored.email === emailIn.value.trim() && stored.pass === passIn.value) {
+        // Hide auth, show analyzer
+        authDiv.style.display     = 'none';
+        analyzerDiv.style.display = 'block';
+      } else {
+        msg.textContent = '❌ Invalid email or password.';
+      }
+    };
+
+    // Optional: auto‐login if already signed up & cached
+    window.addEventListener('DOMContentLoaded', () => {
+      const stored = JSON.parse(localStorage.getItem('demo_user') || '{}');
+      if (stored.email) {
+        // You could auto‐populate email field or even auto‐login:
+        // emailIn.value = stored.email;
+        // authDiv.style.display = 'none'; analyzerDiv.style.display = 'block';
+      }
+    });
+  </script>
 
   <!-- 1) Ensure .wasm loads by pointing locateFile to the correct version -->
   <script>
