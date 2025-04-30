@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Camera + Strip Analyzer</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
@@ -14,35 +14,31 @@
     .result { margin: .4rem 0; }
   </style>
 
-  <!-- Setup OpenCV Module -->
+  <!-- 1) Define Module so Emscripten picks it up -->
   <script>
     var Module = {
-      onRuntimeInitialized: function() {
+      onRuntimeInitialized() {
         document.getElementById('loading').textContent = '✅ OpenCV.js loaded.';
         document.getElementById('takePicBtn').disabled = false;
       }
     };
   </script>
 
-  <!-- Load OpenCV.js -->
+  <!-- 2) Load OpenCV.js synchronously -->
   <script src="https://docs.opencv.org/4.x/opencv.js"></script>
 </head>
-<body>
 
+<body>
   <h1>Camera + Test-Strip Analyzer</h1>
   <div id="loading">Loading OpenCV.js…</div>
-
-  <!-- Camera trigger -->
   <button id="takePicBtn" disabled>Take Picture</button>
   <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
 
-  <!-- Display canvases -->
   <div id="canvasContainer">
     <canvas id="canvasOutput"></canvas>
     <canvas id="canvasWarped"></canvas>
   </div>
 
-  <!-- Results -->
   <div id="output">
     <div class="result">Glucose:   <strong id="res-glucose">—</strong></div>
     <div class="result">Protein:   <strong id="res-protein">—</strong></div>
@@ -50,8 +46,9 @@
     <div class="result">Leukocyte: <strong id="res-leukocyte">—</strong></div>
   </div>
 
+  <!-- 3) All your app logic in one script block -->
   <script>
-    const takePicBtn = document.getElementById('takePicBtn');
+    const takePicBtn  = document.getElementById('takePicBtn');
     const cameraInput = document.getElementById('cameraInput');
 
     takePicBtn.addEventListener('click', () => cameraInput.click());
@@ -61,8 +58,8 @@
       const img = new Image();
       img.onload = () => {
         const canvas = document.getElementById('canvasOutput');
-        const ctx = canvas.getContext('2d');
-        canvas.width = img.width;
+        const ctx    = canvas.getContext('2d');
+        canvas.width  = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
         detectAndWarp();
@@ -71,23 +68,25 @@
     });
 
     function detectAndWarp() {
-      // Convert canvas pixels to Mat
-      const canvasOut = document.getElementById('canvasOutput');
-      const imgData = canvasOut.getContext('2d').getImageData(0, 0, canvasOut.width, canvasOut.height);
-      let src = cv.matFromImageData(imgData);
-      let gray = new cv.Mat();
+      // 1) Grab the raw pixels from the first canvas
+      const out = document.getElementById('canvasOutput');
+      const imgData = out.getContext('2d')
+                        .getImageData(0, 0, out.width, out.height);
+      let src    = cv.matFromImageData(imgData);
+      let gray   = new cv.Mat();
       let thresh = new cv.Mat();
+
+      // 2) Simple threshold to find the 4 markers
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
       cv.threshold(gray, thresh, 60, 255, cv.THRESH_BINARY_INV);
 
-      // Find quadrilateral markers
-      let contours = new cv.MatVector();
-      let hier = new cv.Mat();
+      // 3) Find quads
+      let contours = new cv.MatVector(), hier = new cv.Mat();
       let squares = [];
       cv.findContours(thresh, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
       for (let i = 0; i < contours.size(); i++) {
-        let cnt = contours.get(i);
-        let approx = new cv.Mat();
+        const cnt = contours.get(i);
+        const approx = new cv.Mat();
         cv.approxPolyDP(cnt, approx, 0.02 * cv.arcLength(cnt, true), true);
         if (approx.rows === 4 && cv.contourArea(approx) > 1000) {
           let pts = [];
@@ -97,122 +96,80 @@
               y: approx.data32S[2*j+1]
             });
           }
-          const cx = pts.reduce((s, p) => s + p.x, 0) / 4;
-          const cy = pts.reduce((s, p) => s + p.y, 0) / 4;
-          squares.push({ centroid: { x: cx, y: cy }, corners: pts });
+          const cx = pts.reduce((s,p)=>s+p.x,0)/4;
+          const cy = pts.reduce((s,p)=>s+p.y,0)/4;
+          squares.push({centroid:{x:cx,y:cy},corners:pts});
         }
         approx.delete();
       }
       if (squares.length !== 4) {
-        document.getElementById('loading').textContent = '❌ Failed to detect 4 corner markers.';
-        [src, gray, thresh, contours, hier].forEach(m => m.delete());
+        document.getElementById('loading').textContent =
+          '❌ Failed to detect 4 corner markers.';
+        [src, gray, thresh, contours, hier].forEach(m=>m.delete());
         return;
       }
 
-      // Sort marker points: top-left, top-right, bottom-right, bottom-left
-      squares.sort((a, b) => a.centroid.y - b.centroid.y);
-      const topRow = squares.slice(0, 2).sort((a, b) => a.centroid.x - b.centroid.x);
-      const botRow = squares.slice(2, 4).sort((a, b) => a.centroid.x - b.centroid.x);
+      // 4) Warp into a fixed rectangle
+      squares.sort((a,b)=>a.centroid.y - b.centroid.y);
+      const top    = squares.slice(0,2).sort((a,b)=>a.centroid.x - b.centroid.x);
+      const bottom = squares.slice(2,4).sort((a,b)=>a.centroid.x - b.centroid.x);
       const ptsArr = [
-        topRow[0].centroid,
-        topRow[1].centroid,
-        botRow[1].centroid,
-        botRow[0].centroid
+        top[0].centroid, top[1].centroid,
+        bottom[1].centroid, bottom[0].centroid
       ];
+      const W = 400, H = 600;
+      const warped = document.getElementById('canvasWarped');
+      warped.width  = W; warped.height = H;
 
-      // Perspective warp to fixed size
-      const WIDTH = 400, HEIGHT = 600;
-      const warpedCanvas = document.getElementById('canvasWarped');
-      warpedCanvas.width = WIDTH;
-      warpedCanvas.height = HEIGHT;
-      const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, ptsArr.flatMap(p => [p.x, p.y]));
-      const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, WIDTH, 0, WIDTH, HEIGHT, 0, HEIGHT]);
-      const M = cv.getPerspectiveTransform(srcTri, dstTri);
-      const dst = new cv.Mat();
-      cv.warpPerspective(src, dst, M, new cv.Size(WIDTH, HEIGHT));
-      cv.imshow('canvasWarped', dst);
+      const srcTri = cv.matFromArray(4,1,cv.CV_32FC2, ptsArr.flatMap(p=>[p.x,p.y]));
+      const dstTri = cv.matFromArray(4,1,cv.CV_32FC2, [0,0,W,0,W,H,0,H]);
+      const M      = cv.getPerspectiveTransform(srcTri, dstTri);
+      const dstMat = new cv.Mat();
+      cv.warpPerspective(src, dstMat, M, new cv.Size(W,H));
+      cv.imshow('canvasWarped', dstMat);
 
-      // Cleanup
-      [src, gray, thresh, contours, hier, srcTri, dstTri, M, dst].forEach(m => m.delete());
+      // clean up
+      [src, gray, thresh, contours, hier, srcTri, dstTri, M, dstMat]
+        .forEach(m=>m.delete());
 
-      // Delay then analyze colors
-      setTimeout(() => analyzePads(warpedCanvas), 100);
+      // 5) Finally, sample each pad after a brief delay
+      setTimeout(()=>analyzePads(warped), 50);
     }
 
-    // Color lookup tables
     const references = {
-      glucose: [
-        { hex: '#7dcff4', label: 'Negative' },
-        { hex: '#67b492', label: '+/-100' },
-        { hex: '#6ba864', label: '+250' },
-        { hex: '#7c7d39', label: '++500' },
-        { hex: '#654224', label: '+++1000' }
-      ],
-      protein: [
-        { hex: '#f4ee63', label: 'Negative' },
-        { hex: '#e70948', label: 'Trace' },
-        { hex: '#dce480', label: '+30' },
-        { hex: '#b4cf80', label: '++100' },
-        { hex: '#a2ca95', label: '+++300' },
-        { hex: '#78b289', label: '++++1000' }
-      ],
-      nitrite: [
-        { hex: '#fef6df', label: 'Negative' },
-        { hex: '#fae3e9', label: 'Trace' },
-        { hex: '#d75f9f', label: 'Positive' }
-      ],
-      leukocyte: [
-        { hex: '#fef1de', label: 'Negative' },
-        { hex: '#f9e2c8', label: '+25' },
-        { hex: '#f6dee4', label: '++75' },
-        { hex: '#c298bd', label: '++500' }
-      ]
+      glucose:   [ '#7dcff4','67b492','6ba864','7c7d39','654224' ].map((h,i)=>({hex:'#'+h,label:['Neg','+/-100','+250','++500','+++1000'][i]})),
+      protein:   [ '#f4ee63','e70948','dce480','b4cf80','a2ca95','78b289' ].map((h,i)=>({hex:'#'+h,label:['Neg','Trace','+30','++100','+++300','++++1000'][i]})),
+      nitrite:   [ '#fef6df','fae3e9','d75f9f' ].map((h,i)=>({hex:'#'+h,label:['Neg','Trace','Pos'][i]})),
+      leukocyte: [ '#fef1de','f9e2c8','f6dee4','c298bd' ].map((h,i)=>({hex:'#'+h,label:['Neg','+25','++75','++500'][i]}))
     };
 
-    // Sample and interpret pad colors
-    function analyzePads(cnv) {
-      const ctx = cnv.getContext('2d');
-      const W = cnv.width, H = cnv.height;
-      const R = 8;
-      const positions = [0.414, 0.468, 0.522, 0.575];
-      ['glucose', 'protein', 'nitrite', 'leukocyte'].forEach((lab, i) => {
-        const x = Math.round(W / 2);
-        const y = Math.round(H * positions[i]);
-        const data = ctx.getImageData(x - R, y - R, R * 2, R * 2).data;
-        let r = 0, g = 0, b = 0, count = 0;
-        for (let k = 0; k < data.length; k += 4) {
-          r += data[k];
-          g += data[k + 1];
-          b += data[k + 2];
-          count++;
-        }
-        const avgR = Math.round(r / count);
-        const avgG = Math.round(g / count);
-        const avgB = Math.round(b / count);
-        const hex = '#' + [avgR, avgG, avgB].map(v => v.toString(16).padStart(2, '0')).join('');
-        const res = interpretColor(hex, references[lab]);
-        document.getElementById(`res-${lab}`).textContent = res;
+    function analyzePads(canvas) {
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height, R = 8;
+      const pos = [0.414,0.468,0.522,0.575];
+      ['glucose','protein','nitrite','leukocyte'].forEach((lab,i)=>{
+        const x = Math.round(W/2), y = Math.round(H*pos[i]);
+        const data = ctx.getImageData(x-R,y-R,2*R,2*R).data;
+        let [r,g,b,n]=[0,0,0,0];
+        for(let k=0;k<data.length;k+=4){ r+=data[k]; g+=data[k+1]; b+=data[k+2]; n++; }
+        const avg = [r/g?0:0].map; // dummy
+        const hex = '#'+[r/n,g/n,b/n].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+        const match = nearest(hex,references[lab]);
+        document.getElementById(`res-${lab}`).textContent = match;
       });
     }
 
-    // Nearest-color matcher
-    function interpretColor(hex, ref) {
-      const sr = parseInt(hex.slice(1, 3), 16);
-      const sg = parseInt(hex.slice(3, 5), 16);
-      const sb = parseInt(hex.slice(5, 7), 16);
-      let best = Infinity;
-      let label = '—';
-      ref.forEach(r => {
-        const rr = parseInt(r.hex.slice(1, 3), 16);
-        const rg = parseInt(r.hex.slice(3, 5), 16);
-        const rb = parseInt(r.hex.slice(5, 7), 16);
-        const d = (sr - rr) ** 2 + (sg - rg) ** 2 + (sb - rb) ** 2;
-        if (d < best) {
-          best = d;
-          label = r.label;
-        }
-      });
-      return label;
+    function nearest(hex,arr){
+      const sr=parseInt(hex.slice(1,3),16),
+            sg=parseInt(hex.slice(3,5),16),
+            sb=parseInt(hex.slice(5,7),16);
+      return arr.reduce((best,c)=>{
+        const cr=parseInt(c.hex.slice(1,3),16),
+              cg=parseInt(c.hex.slice(3,5),16),
+              cb=parseInt(c.hex.slice(5,7),16),
+              d=(sr-cr)**2+(sg-cg)**2+(sb-cb)**2;
+        return d<best.dist?{dist:d,label:c.label}:best;
+      },{dist:Infinity}).label;
     }
   </script>
 </body>
