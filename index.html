@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Sign-Up – Test-Strip Analyzer</title>
   <style>
-    body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f5f5f5; }
-    #auth { width: 350px; padding: 2rem; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    h2 { margin-top: 0; text-align: center; }
-    input { width: 100%; padding: .6em; margin: .5em 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-    button { width: 100%; padding: .8em; margin-top: 1em; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-    button:hover { background: #0056b3; }
-    #msg { margin-top: .5em; color: crimson; text-align: center; font-size: .9em; }
+    body {font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f5f5;}
+    #auth {width:350px;padding:2rem;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+    h2 {margin-top:0;text-align:center;}
+    input {width:100%;padding:.6em;margin:.5em 0;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;}
+    button {width:100%;padding:.8em;margin-top:1em;background:#007bff;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+    button:hover {background:#0056b3;}
+    #msg {margin-top:.5em;color:crimson;text-align:center;font-size:.9em;}
   </style>
 </head>
 <body>
@@ -34,12 +34,14 @@
       const address = document.getElementById('address').value.trim();
       const contact = document.getElementById('contact').value.trim();
       const msg     = document.getElementById('msg');
+
       if (!name || !age || !email || !address || !contact) {
         msg.textContent = 'Please fill in all fields.';
         return;
       }
+
       localStorage.setItem('demo_user', JSON.stringify({ name, age, email, address, contact }));
-      window.location.href = 'profile.html';
+      location.href = 'profile.html';
     };
   </script>
 </body>
