@@ -3,45 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Camera + Test-Strip Analyzer</title>
+  <title>Analyzer – Test-Strip</title>
   <style>
-    body { font-family: sans-serif; padding: 1rem; }
-    #loading { margin-bottom: 1rem; font-size: 1.1rem; }
-    #takePicBtn { padding: .8rem 1.2rem; font-size: 1rem; }
-    #canvasContainer { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
-    canvas { border: 1px solid #ccc; max-width: 45vw; height: auto; }
-    #output { margin-top: 1.5rem; }
-    .result { margin: .4rem 0; }
+    body { font-family: sans-serif; padding: 1rem; max-width: 700px; margin: auto; }
+    #user-info, #profile-info { background:#f0f0f0; padding: .8em; border-radius:4px; margin-bottom:1rem; }
+    #canvasContainer { display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem; }
+    canvas { border:1px solid #ccc; max-width:45vw; height:auto; }
+    .result { margin:.4rem 0; }
   </style>
-
-  <!-- 1) Ensure .wasm loads by pointing locateFile to the correct version -->
   <script>
-    var Module = {
-      locateFile(path) {
-        return 'https://docs.opencv.org/4.7.0/' + path;
-      },
-      onRuntimeInitialized() {
-        document.getElementById('loading').textContent = '✅ OpenCV.js loaded.';
-        document.getElementById('takePicBtn').disabled = false;
-      }
-    };
+    document.addEventListener('DOMContentLoaded', () => {
+      const user = JSON.parse(localStorage.getItem('demo_user')||'null');
+      const profile = JSON.parse(localStorage.getItem('demo_profile')||'null');
+      if (!user || !profile) window.location.href = 'index.html';
+      document.getElementById('user-info').textContent = `User: ${user.name}, Age: ${user.age}`;
+      document.getElementById('profile-info').textContent =
+        `BHC: ${profile.bhc} | Hosp: ${profile.hospital} | AOG: ${profile.aog} | EDD: ${profile.edd}`;
+    });
+    var Module = { locateFile(path){ return 'https://docs.opencv.org/4.7.0/'+path },
+      onRuntimeInitialized(){ document.getElementById('loading').textContent='✅ OpenCV.js loaded.';
+        document.getElementById('takePicBtn').disabled=false; }};
   </script>
-
-  <!-- 2) Load OpenCV.js -->
   <script src="https://docs.opencv.org/4.7.0/opencv.js"></script>
 </head>
-
 <body>
-  <h1>Camera + Test-Strip Analyzer</h1>
+  <div id="user-info"></div>
+  <div id="profile-info"></div>
+  <h1>🔬 Test-Strip Analyzer</h1>
   <div id="loading">Loading OpenCV.js…</div>
   <button id="takePicBtn" disabled>Take Picture</button>
-  <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" />
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
 
   <div id="canvasContainer">
     <canvas id="canvasOutput"></canvas>
     <canvas id="canvasWarped" width="400" height="600"></canvas>
   </div>
-
   <div id="output">
     <div class="result">Glucose:   <strong id="res-glucose">—</strong></div>
     <div class="result">Protein:   <strong id="res-protein">—</strong></div>
